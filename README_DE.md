@@ -174,8 +174,6 @@ einstellen, um Timing- oder USB-Probleme auszuschließen.
 
 Die meisten Tasten verwenden bereits SignalRGBs standardisierte Tastennamen. Die Hardware-Map wird aber noch weiter vervollständigt.
 
-Aktuell ist **Right Shift / rechte Umschalttaste noch nicht gemappt**, da das zugehörige NZXT-RGB-Bit noch nicht eindeutig verifiziert wurde. Für diese Taste kann RGB/Keytap daher noch fehlen.
-
 ## Technische Details
 
 Das RGB-Protokoll der NZXT Function 2 wurde aus USB-HID-Daten reverse engineered und anschließend direkt an echter Hardware getestet.
