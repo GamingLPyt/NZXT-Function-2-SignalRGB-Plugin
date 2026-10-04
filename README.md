@@ -172,8 +172,6 @@ to rule out timing or USB issues.
 
 Most keys use SignalRGB's standard keyboard identifiers. However, the current hardware map is still being refined.
 
-At the moment, **Right Shift is not mapped**, because its NZXT RGB bit has not yet been verified. Its RGB/Keytap behavior may therefore be missing until that mapping is confirmed.
-
 ## Technical notes
 
 The NZXT Function 2 RGB protocol was reverse engineered from USB HID traffic and verified on real hardware.
