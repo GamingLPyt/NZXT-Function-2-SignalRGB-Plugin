@@ -45,7 +45,7 @@ Lade die `.js`-Plugin-Datei aus diesem Repository herunter.
 Zum Beispiel:
 
 ```text
-NZXT_Function2_PerKey_ISO_DE_Keytap_TestRGB_v6.js
+NZXT_Function2_PerKey_ISO_DE_Keytap_v6.js
 ```
 
 ### 2. SignalRGB vollständig beenden
