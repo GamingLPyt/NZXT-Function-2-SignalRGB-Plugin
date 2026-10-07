@@ -9,13 +9,14 @@ Die normale SignalRGB-Unterstützung behandelt die Tastatur nur als wenige Beleu
 ## Funktionen
 
 - Echtes **Per-Key-RGB** in SignalRGB
-- Deutsches **ISO-DE**-Layout
+- Vollständiges deutsches **ISO-DE**-Layout inklusive rechter Shift-Taste (`Bit 77`)
 - SignalRGB-Canvas-Effekte über die komplette Tastatur
 - Unterstützung für **Keytap-/Tastendruck-Effekte** über SignalRGB-kompatible Tastennamen
-- Volle RGB-Auflösung mit bis zu **60 FPS**
+- 24 RGB-Auflösung mit bis zu **60 FPS**
 - Optionale Farbauflösungen: `32`, `24`, `16`, `12` oder `8`
 - Optionale Update-Raten: `60`, `30`, `20`, `15` oder `10 FPS`
 - Frame-Caching zur Reduzierung unnötiger USB-Übertragungen
+- Eingebaute **TestRGB-Diagnose** für Raw-Bit-, Zeilen- und Einzelbit-Tests
 - Benutzerdefiniertes Plugin, das normale SignalRGB-Updates überlebt
 
 ## Getestete Hardware
@@ -44,7 +45,7 @@ Lade die `.js`-Plugin-Datei aus diesem Repository herunter.
 Zum Beispiel:
 
 ```text
-NZXT_Function2_PerKey_ISO_DE_Keytap_v5.js
+NZXT_Function2_PerKey_ISO_DE_Keytap_TestRGB_v6.js
 ```
 
 ### 2. SignalRGB vollständig beenden
@@ -147,6 +148,39 @@ So verwendest du Keytap:
 
 Je nach ausgewähltem SignalRGB-Effekt kann die gedrückte Taste beispielsweise kurz aufleuchten oder eine Welle/Ripple-Animation von dieser Taste aus starten, während der normale Canvas-Effekt im Hintergrund weiterläuft.
 
+## TestRGB / Layout-Diagnose
+
+Das Plugin enthält einen eingebauten Diagnosemodus. Damit können weitere Function-2-Layouts und Varianten getestet werden, ohne Wireshark oder ein separates Testprogramm zu benötigen.
+
+Öffne in SignalRGB die Einstellungen der Function 2 und verwende den Bereich **Diagnostics**:
+
+```text
+Diagnostic Mode
+- Off
+- Raw Bit Scan
+- Physical Key Scan
+- Single Bit
+
+Test Speed
+- 250 ms
+- 500 ms
+- 750 ms
+- 1000 ms
+
+Single Bit
+- 0 ... 143
+```
+
+`Raw Bit Scan` testet die rohen NZXT-RGB-Bits `0` bis `143` nacheinander. Das aktive Bit leuchtet rot und die aktuelle Bitnummer wird gleichzeitig in das SignalRGB-Geräte-Log geschrieben.
+
+`Physical Key Scan` geht das aktuell bekannte Layout Zeile für Zeile von links nach rechts durch. Die aktive Taste leuchtet rot und im Log werden der SignalRGB-Tastenname sowie die zugehörigen NZXT-Bits angezeigt.
+
+`Single Bit` lässt ein einzelnes ausgewähltes Roh-Bit dauerhaft rot leuchten und eignet sich für gezielte Tests.
+
+Nach Abschluss eines Scans `Diagnostic Mode` einmal auf `Off` stellen und anschließend den gewünschten Scan erneut auswählen.
+
+Für ein neues Layout wie Nordic ISO ist ein Video der Tastatur während des `Raw Bit Scan` zusammen mit dem SignalRGB-Geräte-Log besonders hilfreich.
+
 ## Fehlerbehebung
 
 ### Die Tastatur erscheint nicht
@@ -172,7 +206,9 @@ einstellen, um Timing- oder USB-Probleme auszuschließen.
 
 ### Keytap funktioniert bei einer bestimmten Taste nicht
 
-Die meisten Tasten verwenden bereits SignalRGBs standardisierte Tastennamen. Die Hardware-Map wird aber noch weiter vervollständigt.
+Die ISO-DE-Hardware-Map ist jetzt vollständig, inklusive **rechter Umschalttaste / Right Shift auf NZXT-RGB-Bit `77`**.
+
+Wenn ein Keytap-Effekt bei einer bestimmten Taste nicht reagiert, prüfe zuerst, ob der ausgewählte SignalRGB-Effekt Keytap unterstützt und **Enable Keytap Effect** aktiviert ist. Falls das Problem weiterhin besteht, kannst du ein Issue erstellen und die betroffene Taste, deine SignalRGB-Version, die Firmware-Version der Tastatur und den getesteten Effekt angeben.
 
 ## Technische Details
 
@@ -214,6 +250,7 @@ Tests mit weiteren Function-2-Varianten sind sehr willkommen.
 
 Besonders hilfreich sind:
 
+- Keytap-Verhalten mit unterschiedlichen SignalRGB-Effekten testen
 - andere Function-2-Product-IDs testen
 - ANSI-Layouts testen
 - physische Tastenpositionen weiter verbessern
