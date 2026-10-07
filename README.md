@@ -9,13 +9,14 @@ The stock SignalRGB implementation exposes the keyboard as a small number of lig
 ## Features
 
 - True **per-key RGB** control in SignalRGB
-- German **ISO-DE** physical key layout
+- Complete German **ISO-DE** physical key layout, including Right Shift (`bit 77`)
 - SignalRGB canvas effects across the complete keyboard
 - **Keytap / keypress effect support** through SignalRGB-compatible key names
 - Full RGB detail at up to **60 FPS**
 - Optional lower color-detail modes: `32`, `24`, `16`, `12`, or `8`
 - Optional update-rate limits: `60`, `30`, `20`, `15`, or `10 FPS`
 - Frame caching to avoid unnecessary USB traffic
+- Built-in **TestRGB diagnostics** for raw-bit, row-by-row, and single-bit testing
 - Custom user plugin, so it survives normal SignalRGB updates
 
 ## Tested hardware
@@ -44,7 +45,7 @@ Download the `.js` plugin file from this repository.
 For example:
 
 ```text
-NZXT_Function2_PerKey_ISO_DE_Keytap_v5.js
+NZXT_Function2_PerKey_ISO_DE_Keytap_v6.js
 ```
 
 ### 2. Close SignalRGB
@@ -145,6 +146,39 @@ To use a Keytap effect:
 
 Depending on the selected SignalRGB effect, the pressed key may flash, change color, or start a ripple/wave from that key while the normal canvas effect continues underneath.
 
+## TestRGB / layout diagnostics
+
+The plugin includes a built-in diagnostic mode for testing additional Function 2 layouts and variants without Wireshark or a separate test program.
+
+Open the Function 2 device settings in SignalRGB and use the **Diagnostics** section:
+
+```text
+Diagnostic Mode
+- Off
+- Raw Bit Scan
+- Physical Key Scan
+- Single Bit
+
+Test Speed
+- 250 ms
+- 500 ms
+- 750 ms
+- 1000 ms
+
+Single Bit
+- 0 ... 143
+```
+
+`Raw Bit Scan` tests raw NZXT RGB bits `0` through `143` one after another. The active bit is shown in red and the current bit number is written to the SignalRGB device log.
+
+`Physical Key Scan` walks through the currently known layout row-by-row from left to right. The active key is shown in red and the log prints the SignalRGB key name plus the associated NZXT bit(s).
+
+`Single Bit` keeps one selected raw bit illuminated in red and is useful for targeted testing.
+
+After a scan completes, set `Diagnostic Mode` to `Off` and select the scan mode again to restart it.
+
+For testing a new layout such as Nordic ISO, a video of the keyboard during `Raw Bit Scan` together with the SignalRGB device log is especially useful.
+
 ## Troubleshooting
 
 ### The keyboard does not appear
@@ -170,7 +204,9 @@ to rule out timing or USB issues.
 
 ### Keytap does not react to a specific key
 
-Most keys use SignalRGB's standard keyboard identifiers. However, the current hardware map is still being refined.
+The ISO-DE hardware map is now complete, including **Right Shift on NZXT RGB bit `77`**.
+
+If a Keytap effect does not react to a specific key, first verify that the selected SignalRGB effect supports Keytap and that **Enable Keytap Effect** is enabled. If the problem remains, please open an issue and include the affected key, SignalRGB version, keyboard firmware version, and the effect you tested.
 
 ## Technical notes
 
@@ -212,6 +248,7 @@ Testing on additional Function 2 variants is very welcome.
 
 Useful contributions include:
 
+- testing Keytap behavior across different SignalRGB effects
 - testing other Function 2 product IDs
 - testing ANSI layouts
 - improving physical key positions
