@@ -1,5 +1,5 @@
 /*
- * NZXT Function 2 Per-Key RGB - ISO-DE / Keytap / TestRGB
+ * NZXT Function 2 Per-Key RGB - Multi-Layout / Keytap / TestRGB v6.2
  *
  * Custom SignalRGB plugin for:
  *   VID 0x1E71 / PID 0x2131
@@ -27,6 +27,7 @@
  *   to the correct LEDs by reactive/Keytap effects.
  *
  * Verified ISO-DE mapping includes Right Shift on NZXT RGB bit 77.
+ * Nordic ISO uses the same RGB bit/LED mapping; QWERTY swaps Y/Z Keytap names.
  * TestRGB: Raw Bit Scan, Physical Key Scan and Single Bit diagnostics.
  */
 
@@ -34,18 +35,19 @@
 lightingMode:readonly,
 colorDetail:readonly,
 updateRate:readonly,
+keyboardLayout:readonly,
 diagnosticMode:readonly,
 diagnosticSpeed:readonly,
 diagnosticBit:readonly
 */
 
-export function Name() { return "NZXT Function 2 Per-Key ISO-DE"; }
+export function Name() { return "NZXT Function 2 Per-Key ISO"; }
 export function VendorId() { return 0x1E71; }
 export function ProductId() { return 0x2131; }
 export function Publisher() { return "GamingLPyt / Community Reverse Engineering"; }
 export function DeviceType() { return "keyboard"; }
 export function Size() { return DeviceConfig.size; }
-export function LedNames() { return DeviceConfig.vLedNames; }
+export function LedNames() { return getLayoutLedNames(); }
 export function LedPositions() { return DeviceConfig.vLedPositions; }
 export function ImageUrl() { return DeviceConfig.image; }
 
@@ -84,26 +86,35 @@ export function ControllableParameters() {
             default: "60 FPS"
         },
         {
+            property: "keyboardLayout",
+            group: "lighting",
+            label: "Keyboard Layout",
+            type: "combobox",
+            values: ["German ISO-DE", "Nordic ISO (QWERTY)"],
+            default: "German ISO-DE",
+            description: "Selects the SignalRGB key names used for Keytap. The RGB bit mapping and physical LED positions are identical."
+        },
+        {
             property: "diagnosticMode",
-            group: "diagnostics",
-            label: "Diagnostic Mode",
+            group: "lighting",
+            label: "TestRGB Mode",
             type: "combobox",
             values: ["Off", "Raw Bit Scan", "Physical Key Scan", "Single Bit"],
             default: "Off",
-            description: "Raw Bit Scan tests NZXT bits 0-143. Physical Key Scan walks the current layout row-by-row. Single Bit tests one selected raw bit."
+            description: "Raw Bit Scan tests NZXT bits 0-143. Physical Key Scan walks the selected layout row-by-row. Single Bit tests one selected raw bit."
         },
         {
             property: "diagnosticSpeed",
-            group: "diagnostics",
-            label: "Test Speed",
+            group: "lighting",
+            label: "TestRGB Speed",
             type: "combobox",
             values: ["250 ms", "500 ms", "750 ms", "1000 ms"],
             default: "750 ms"
         },
         {
             property: "diagnosticBit",
-            group: "diagnostics",
-            label: "Single Bit",
+            group: "lighting",
+            label: "TestRGB Single Bit",
             type: "number",
             step: "1",
             min: "0",
@@ -117,7 +128,7 @@ const REPORT_LENGTH = 65;
 const MASK_BYTES = 18;
 const GROUP_BYTES = 22;
 
-const MODEL_NAME = "Function 2 ISO-DE";
+const MODEL_NAME = "Function 2 ISO";
 
 class deviceLibrary {
     constructor() {
@@ -482,6 +493,48 @@ const keys = DeviceConfig.vLedNames.map((name, index) => ({
 const vLedNames = DeviceConfig.vLedNames;
 const vLedPositions = DeviceConfig.vLedPositions;
 
+function getLayoutLedNames() {
+    const names = DeviceConfig.vLedNames.slice();
+
+    if (String(keyboardLayout || "German ISO-DE") === "Nordic ISO (QWERTY)") {
+        // Verified physical LED mapping is identical to ISO-DE.
+        // Nordic uses QWERTY, so only the Y/Z SignalRGB key names swap.
+        const zIndex = names.indexOf("Z");
+        const yIndex = names.indexOf("Y");
+
+        if (zIndex >= 0 && yIndex >= 0) {
+            names[zIndex] = "Y";
+            names[yIndex] = "Z";
+        }
+    }
+
+    return names;
+}
+
+function applyKeyboardLayout(logChange) {
+    const names = getLayoutLedNames();
+
+    for (let i = 0; i < keys.length; i++) {
+        keys[i].name = names[i];
+    }
+
+    device.setControllableLeds(names, DeviceConfig.vLedPositions);
+
+    // Force a clean next render after changing Keytap names.
+    lastStream = null;
+    lastCanvasColors = null;
+    lastDetail = null;
+    lastRenderAt = 0;
+
+    if (logChange) {
+        device.log("[NZXT Layout] Active layout: " + String(keyboardLayout || "German ISO-DE"));
+    }
+}
+
+export function onkeyboardLayoutChanged() {
+    applyKeyboardLayout(true);
+}
+
 
 let lastStream = null;
 let lastCanvasColors = null;
@@ -505,7 +558,7 @@ const physicalScanOrder = keys
 export function Initialize() {
     device.setName(Name());
     device.setSize(Size());
-    device.setControllableLeds(LedNames(), LedPositions());
+    applyKeyboardLayout(false);
 
     lastStream = null;
     lastCanvasColors = null;
@@ -520,7 +573,7 @@ export function Initialize() {
 
     setSoftwareMode();
 
-    device.log("Function 2 ISO-DE v6 initialized: Full color / 60 FPS / Keytap / TestRGB");
+    device.log("Function 2 ISO v6.2 initialized: German + Nordic layout support / 24 color / 60 FPS / Keytap / TestRGB");
 }
 
 export function Render() {
