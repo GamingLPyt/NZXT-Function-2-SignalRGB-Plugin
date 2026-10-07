@@ -9,15 +9,44 @@ Die normale SignalRGB-Unterstützung behandelt die Tastatur nur als wenige Beleu
 ## Funktionen
 
 - Echtes **Per-Key-RGB** in SignalRGB
-- Vollständiges deutsches **ISO-DE**-Layout inklusive rechter Shift-Taste (`Bit 77`)
+- Multi-Layout-Support:
+  - **Deutsch ISO-DE**
+  - **Nordic ISO (QWERTY)**
+- Vollständige physische ISO-RGB-Zuordnung inklusive rechter Shift-Taste (`Bit 77`)
 - SignalRGB-Canvas-Effekte über die komplette Tastatur
 - Unterstützung für **Keytap-/Tastendruck-Effekte** über SignalRGB-kompatible Tastennamen
-- 24 RGB-Auflösung mit bis zu **60 FPS**
+- Volle RGB-Auflösung mit bis zu **60 FPS**
 - Optionale Farbauflösungen: `32`, `24`, `16`, `12` oder `8`
 - Optionale Update-Raten: `60`, `30`, `20`, `15` oder `10 FPS`
 - Frame-Caching zur Reduzierung unnötiger USB-Übertragungen
 - Eingebaute **TestRGB-Diagnose** für Raw-Bit-, Zeilen- und Einzelbit-Tests
 - Benutzerdefiniertes Plugin, das normale SignalRGB-Updates überlebt
+
+## Unterstützte Layouts
+
+### Deutsch ISO-DE
+
+Deutsch ISO-DE ist das ursprüngliche Entwicklungs-Layout und vollständig gemappt.
+
+### Nordic ISO
+
+Beim Test hat sich gezeigt, dass die **physische RGB-Bit-Zuordnung und die LED-Positionen identisch** zur deutschen ISO-Version sind.
+
+Der für SignalRGB/Keytap wichtige Unterschied ist QWERTY gegenüber QWERTZ:
+
+```text
+Deutsch ISO-DE:
+obere Buchstabenreihe  -> Z
+untere Buchstabenreihe -> Y
+
+Nordic ISO:
+obere Buchstabenreihe  -> Y
+untere Buchstabenreihe -> Z
+```
+
+Deshalb besitzt v6.2 eine auswählbare Tastaturbelegung und tauscht bei Nordic ISO die SignalRGB-Keynamen für Y und Z.
+
+Das eigentliche HID-Protokoll, die RGB-Bits, die LED-Positionen und das 60-FPS-Streaming bleiben unverändert.
 
 ## Getestete Hardware
 
@@ -32,20 +61,18 @@ Das Plugin wurde mit folgender Hardware entwickelt und getestet:
 | HID Usage Page | `0xFFCA` |
 | HID Usage | `0x0001` |
 | Getestete Firmware | `1.3.22` |
-| Layout | Deutsch ISO-DE |
+| Entwicklungs-Layout | Deutsch ISO-DE |
 
-Andere Function-2-Varianten bzw. Product IDs wurden **noch nicht verifiziert**.
+Nordic ISO wurde zusätzlich mit der physischen Tasten-/LED-Zuordnung verglichen. Falls deine Nordic Function 2 eine andere Product ID oder ein abweichendes Firmware-Verhalten hat, erstelle bitte ein Issue und füge die in SignalRGB angezeigten Geräteinformationen hinzu.
 
-## Installation / How to use
+## Installation / Verwendung
 
 ### 1. Plugin herunterladen
 
-Lade die `.js`-Plugin-Datei aus diesem Repository herunter.
-
-Zum Beispiel:
+Lade die `.js`-Plugin-Datei aus diesem Repository herunter:
 
 ```text
-NZXT_Function2_PerKey_ISO_DE_Keytap_v6.js
+NZXT_Function2_PerKey_MultiLayout_Keytap_v6_2.js
 ```
 
 ### 2. SignalRGB vollständig beenden
@@ -91,20 +118,34 @@ Starte SignalRGB wieder.
 Die Tastatur sollte nun als
 
 ```text
-NZXT Function 2 Per-Key ISO-DE
+NZXT Function 2 Per-Key ISO
 ```
 
 angezeigt werden.
 
 SignalRGB sollte das Gerät dabei als Custom-/User-Plugin kennzeichnen.
 
+### 7. Tastatur-Layout auswählen
+
+Öffne die Geräteeinstellungen der Function 2 und wähle:
+
+```text
+Keyboard Layout
+- German ISO-DE
+- Nordic ISO (QWERTY)
+```
+
+Für eine deutsche Tastatur verwendest du `German ISO-DE`, für das Nordic-Layout `Nordic ISO (QWERTY)`.
+
 ## Empfohlene Einstellungen
 
 Standardmäßig verwendet das Plugin:
 
 ```text
+Keyboard Layout: German ISO-DE
 Per-Key Color Detail: 24
 Update Rate: 60 FPS
+TestRGB Mode: Off
 ```
 
 Diese Einstellungen liefen während der Entwicklung auf der getesteten Tastatur stabil.
@@ -120,9 +161,9 @@ Bei niedrigeren Farbauflösungen werden Tasten mit ähnlichen Farben in gemeinsa
 
 ## Keytap-Effekte
 
-Keytap wird von **SignalRGB selbst** umgesetzt. Das Geräte-Plugin muss SignalRGB lediglich die richtigen Tastennamen und Positionen zur Verfügung stellen.
+Keytap wird von **SignalRGB selbst** umgesetzt. Das Geräte-Plugin stellt SignalRGB die richtigen Tastennamen und Positionen zur Verfügung.
 
-Dieses Plugin exportiert `LedNames()` und `LedPositions()` und verwendet die von SignalRGB erwarteten Tastennamen, zum Beispiel:
+Das Plugin exportiert `LedNames()` und `LedPositions()` und verwendet die von SignalRGB erwarteten Tastennamen, zum Beispiel:
 
 ```text
 A
@@ -139,6 +180,13 @@ Num Enter
 
 Dadurch kann SignalRGB Windows-Tastendrücke den entsprechenden LEDs der Tastatur zuordnen.
 
+Die ausgewählte Option `Keyboard Layout` passt außerdem die Y/Z-Zuordnung für Keytap an:
+
+```text
+German ISO-DE -> QWERTZ
+Nordic ISO    -> QWERTY
+```
+
 So verwendest du Keytap:
 
 1. Wähle in SignalRGB einen Effekt aus, der Keytap unterstützt.
@@ -152,34 +200,48 @@ Je nach ausgewähltem SignalRGB-Effekt kann die gedrückte Taste beispielsweise 
 
 Das Plugin enthält einen eingebauten Diagnosemodus. Damit können weitere Function-2-Layouts und Varianten getestet werden, ohne Wireshark oder ein separates Testprogramm zu benötigen.
 
-Öffne in SignalRGB die Einstellungen der Function 2 und verwende den Bereich **Diagnostics**:
+Die TestRGB-Einstellungen findest du direkt in den Geräteeinstellungen der Function 2:
 
 ```text
-Diagnostic Mode
+TestRGB Mode
 - Off
 - Raw Bit Scan
 - Physical Key Scan
 - Single Bit
 
-Test Speed
+TestRGB Speed
 - 250 ms
 - 500 ms
 - 750 ms
 - 1000 ms
 
-Single Bit
+TestRGB Single Bit
 - 0 ... 143
 ```
 
-`Raw Bit Scan` testet die rohen NZXT-RGB-Bits `0` bis `143` nacheinander. Das aktive Bit leuchtet rot und die aktuelle Bitnummer wird gleichzeitig in das SignalRGB-Geräte-Log geschrieben.
+### Raw Bit Scan
 
-`Physical Key Scan` geht das aktuell bekannte Layout Zeile für Zeile von links nach rechts durch. Die aktive Taste leuchtet rot und im Log werden der SignalRGB-Tastenname sowie die zugehörigen NZXT-Bits angezeigt.
+`Raw Bit Scan` testet die rohen NZXT-RGB-Bits `0` bis `143` nacheinander.
 
-`Single Bit` lässt ein einzelnes ausgewähltes Roh-Bit dauerhaft rot leuchten und eignet sich für gezielte Tests.
+Die Tastatur wird geleert und das aktuell getestete Bit leuchtet rot. Gleichzeitig wird die aktuelle Bitnummer in das SignalRGB-Geräte-Log geschrieben.
 
-Nach Abschluss eines Scans `Diagnostic Mode` einmal auf `Off` stellen und anschließend den gewünschten Scan erneut auswählen.
+Dieser Modus eignet sich am besten, um unbekannte RGB-Bits bei einer anderen Function-2-Variante zu finden.
 
-Für ein neues Layout wie Nordic ISO ist ein Video der Tastatur während des `Raw Bit Scan` zusammen mit dem SignalRGB-Geräte-Log besonders hilfreich.
+### Physical Key Scan
+
+`Physical Key Scan` geht das bekannte physische Layout **Zeile für Zeile von links nach rechts** durch.
+
+Die aktive Taste leuchtet rot und im Geräte-Log werden der SignalRGB-Tastenname sowie die zugehörigen NZXT-RGB-Bits angezeigt.
+
+Damit lässt sich ein weiteres ISO-Layout sehr schnell mit der bekannten physischen RGB-Zuordnung vergleichen.
+
+### Single Bit
+
+`Single Bit` lässt ein einzelnes ausgewähltes NZXT-Bit dauerhaft rot leuchten.
+
+Über `TestRGB Single Bit` kann ein beliebiges Bit zwischen `0` und `143` ausgewählt werden.
+
+Nach Abschluss eines Scans `TestRGB Mode` einmal auf `Off` stellen und anschließend den gewünschten Scan erneut auswählen.
 
 ## Fehlerbehebung
 
@@ -187,10 +249,12 @@ Für ein neues Layout wie Nordic ISO ist ein Video der Tastatur während des `Ra
 
 Prüfe Folgendes:
 
-- Die Tastatur ist die ISO-Version mit PID `0x2131`
+- Die Tastatur ist eine unterstützte Function-2-ISO-Variante
 - Die `.js` liegt in `Documents\WhirlwindFX\Plugins`
 - SignalRGB wurde vollständig neu gestartet
 - Es liegt keine ältere Custom-Function-2-Datei mehr im gleichen Ordner
+
+Wenn deine Function 2 eine andere Product ID als `0x2131` besitzt, füge bei einem Issue bitte die Geräteinformationen aus **SignalRGB → Einstellungen → Geräteliste** hinzu.
 
 ### Die Tastatur erscheint, leuchtet aber nicht richtig
 
@@ -204,11 +268,22 @@ Zum Gegencheck kannst du außerdem zunächst
 
 einstellen, um Timing- oder USB-Probleme auszuschließen.
 
+### Y und Z reagieren beim Keytap an der falschen Position
+
+Prüfe die Einstellung `Keyboard Layout`:
+
+```text
+German ISO-DE       -> QWERTZ
+Nordic ISO (QWERTY) -> QWERTY
+```
+
 ### Keytap funktioniert bei einer bestimmten Taste nicht
 
-Die ISO-DE-Hardware-Map ist jetzt vollständig, inklusive **rechter Umschalttaste / Right Shift auf NZXT-RGB-Bit `77`**.
+Die bekannte ISO-Hardware-Map enthält unter anderem **Right Shift auf NZXT-RGB-Bit `77`**.
 
-Wenn ein Keytap-Effekt bei einer bestimmten Taste nicht reagiert, prüfe zuerst, ob der ausgewählte SignalRGB-Effekt Keytap unterstützt und **Enable Keytap Effect** aktiviert ist. Falls das Problem weiterhin besteht, kannst du ein Issue erstellen und die betroffene Taste, deine SignalRGB-Version, die Firmware-Version der Tastatur und den getesteten Effekt angeben.
+Wenn ein Keytap-Effekt bei einer bestimmten Taste nicht reagiert, prüfe zuerst, ob der ausgewählte SignalRGB-Effekt Keytap unterstützt und **Enable Keytap Effect** aktiviert ist.
+
+Falls das Problem weiterhin besteht, kannst du ein Issue erstellen und die betroffene Taste, das ausgewählte Tastatur-Layout, deine SignalRGB-Version, die Firmware-Version der Tastatur und den getesteten Effekt angeben.
 
 ## Technische Details
 
@@ -238,6 +313,8 @@ Folgepaket:
 
 Das Plugin fasst identische Farben nach Möglichkeit zusammen und kann den SignalRGB-Canvas optional auf weniger Farbgruppen quantisieren.
 
+Deutsch ISO-DE und Nordic ISO verwenden in der aktuellen Implementierung dieselbe physische RGB-Bit-Map. Der Layout-Schalter ändert nur die für den QWERTZ-/QWERTY-Unterschied notwendige Y/Z-Benennung in SignalRGB.
+
 ## Wichtig
 
 Dies ist ein **inoffizielles Community-Projekt** und steht in keiner Verbindung zu NZXT, SignalRGB oder WhirlwindFX.
@@ -250,9 +327,10 @@ Tests mit weiteren Function-2-Varianten sind sehr willkommen.
 
 Besonders hilfreich sind:
 
-- Keytap-Verhalten mit unterschiedlichen SignalRGB-Effekten testen
-- andere Function-2-Product-IDs testen
+- Nordic-Keytap mit unterschiedlichen SignalRGB-Effekten testen
+- andere Function-2-Product-IDs und Firmware-Versionen testen
 - ANSI-Layouts testen
 - physische Tastenpositionen weiter verbessern
 - firmwareabhängiges Verhalten dokumentieren
 - USB-Captures von noch nicht unterstützten Varianten bereitstellen
+- weitere Layouts mit TestRGB mappen
