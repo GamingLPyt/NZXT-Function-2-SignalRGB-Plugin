@@ -2,7 +2,7 @@
 
 [Deutsch](README_DE.md) | [English](README.md)
 
-Inoffizielles Community-Plugin für **echtes Per-Key-RGB** auf der **NZXT Function 2 ISO** in SignalRGB.
+Inoffizielles Community-Plugin für **echtes Per-Key-RGB** auf der **NZXT Function 2** (**ISO** und **US ANSI**) in SignalRGB.
 
 Die normale SignalRGB-Unterstützung behandelt die Tastatur nur als wenige Beleuchtungszonen. Dieses Plugin verwendet direkt das USB-HID-RGB-Protokoll der Tastatur und ermöglicht SignalRGB dadurch, die einzelnen Tasten anzusteuern und normale Canvas-Effekte über die komplette Tastatur darzustellen.
 
@@ -12,12 +12,15 @@ Die normale SignalRGB-Unterstützung behandelt die Tastatur nur als wenige Beleu
 - Multi-Layout-Support:
   - **Deutsch ISO-DE**
   - **Nordic ISO (QWERTY)**
+  - **US ANSI (QWERTY)**
+  - **Auto**: wählt US ANSI oder Deutsch ISO-DE anhand der Product ID der Tastatur
 - Vollständige physische ISO-RGB-Zuordnung inklusive rechter Shift-Taste (`Bit 77`)
 - SignalRGB-Canvas-Effekte über die komplette Tastatur
 - Unterstützung für **Keytap-/Tastendruck-Effekte** über SignalRGB-kompatible Tastennamen
-- Volle RGB-Auflösung mit bis zu **60 FPS**
-- Optionale Farbauflösungen: `32`, `24`, `16`, `12` oder `8`
+- Per-Key-Farben mit bis zu **60 FPS** und bis zu **10 verschiedenen Farben pro Frame** (Grenze der Firmware, siehe [Technische Details](#technische-details))
+- Optionale niedrigere Farbauflösungen: `8`, `6` oder `4`
 - Optionale Update-Raten: `60`, `30`, `20`, `15` oder `10 FPS`
+- **Anti-Flicker-Timing**: Frames weichen einer internen 60-ms-Aufgabe der Firmware aus, die sonst einzelne Tasten kurz ausgehen lässt
 - Frame-Caching zur Reduzierung unnötiger USB-Übertragungen
 - Eingebaute **TestRGB-Diagnose** für Raw-Bit-, Zeilen- und Einzelbit-Tests
 - Benutzerdefiniertes Plugin, das normale SignalRGB-Updates überlebt
@@ -48,20 +51,34 @@ Deshalb besitzt v6.2 eine auswählbare Tastaturbelegung und tauscht bei Nordic I
 
 Das eigentliche HID-Protokoll, die RGB-Bits, die LED-Positionen und das 60-FPS-Streaming bleiben unverändert.
 
+### US ANSI
+
+Die US-ANSI-Function-2 verwendet die Product ID `0x2130` und dasselbe RGB-Protokoll. Das Layout unterscheidet sich an einigen Stellen von ISO:
+
+- `\` liegt am Ende der Tab-Reihe auf **Bit 45**
+- es gibt keine `ISO_<`-Taste; ihr Bit gehört zur breiteren linken Shift-Taste
+- das `ISO_#`-Bit (`60`) liegt unter der breiteren ANSI-Enter-Taste
+- rechts in der untersten Reihe liegen Right Alt, Right Win, Fn, Right Ctrl, und **Bit 90 ist Fn**
+- Y und Z verwenden die QWERTY-Namen
+
+### Auto
+
+`Auto` ist die Standardeinstellung. Für die Product ID `0x2130` wird `US ANSI (QWERTY)` gewählt, sonst `German ISO-DE`. Für die Nordic-Tastatur `Nordic ISO (QWERTY)` bitte manuell auswählen.
+
 ## Getestete Hardware
 
 Das Plugin wurde mit folgender Hardware entwickelt und getestet:
 
-| Eigenschaft | Wert |
-| --- | --- |
-| Tastatur | NZXT Function 2 ISO |
-| USB Vendor ID | `0x1E71` |
-| USB Product ID | `0x2131` |
-| HID Interface | `1` |
-| HID Usage Page | `0xFFCA` |
-| HID Usage | `0x0001` |
-| Getestete Firmware | `1.3.22` |
-| Entwicklungs-Layout | Deutsch ISO-DE |
+| Eigenschaft | ISO | US ANSI |
+| --- | --- | --- |
+| Tastatur | NZXT Function 2 ISO | NZXT Function 2 US ANSI |
+| USB Vendor ID | `0x1E71` | `0x1E71` |
+| USB Product ID | `0x2131` | `0x2130` |
+| HID Interface | `1` | `1` |
+| HID Usage Page | `0xFFCA` | `0xFFCA` |
+| HID Usage | `0x0001` | `0x0001` |
+| Getestete Firmware | `1.3.22` | `1.3.22` |
+| Layout | Deutsch ISO-DE (Entwicklungs-Layout) | US ANSI (QWERTY) |
 
 Nordic ISO wurde zusätzlich mit der physischen Tasten-/LED-Zuordnung verglichen. Falls deine Nordic Function 2 eine andere Product ID oder ein abweichendes Firmware-Verhalten hat, erstelle bitte ein Issue und füge die in SignalRGB angezeigten Geräteinformationen hinzu.
 
@@ -101,7 +118,7 @@ Du kannst den richtigen Ordner auch direkt in SignalRGB über den **Plugins**-Bu
 
 Wenn du bereits eine ältere eigene Function-2-`.js` installiert hast, entferne sie oder verschiebe sie aus dem Custom-Plugin-Ordner.
 
-Idealerweise sollte nur **ein Custom-Plugin für VID `0x1E71` / PID `0x2131`** vorhanden sein.
+Idealerweise sollte nur **ein Custom-Plugin für VID `0x1E71` / PID `0x2130` oder `0x2131`** vorhanden sein.
 
 ### 5. Plugin-Datei kopieren
 
@@ -118,7 +135,7 @@ Starte SignalRGB wieder.
 Die Tastatur sollte nun als
 
 ```text
-NZXT Function 2 Per-Key ISO
+NZXT Function 2 Per-Key
 ```
 
 angezeigt werden.
@@ -131,29 +148,32 @@ SignalRGB sollte das Gerät dabei als Custom-/User-Plugin kennzeichnen.
 
 ```text
 Keyboard Layout
+- Auto
+- US ANSI (QWERTY)
 - German ISO-DE
 - Nordic ISO (QWERTY)
 ```
 
-Für eine deutsche Tastatur verwendest du `German ISO-DE`, für das Nordic-Layout `Nordic ISO (QWERTY)`.
+`Auto` wählt US ANSI oder German ISO-DE anhand der Product ID der Tastatur. Für das Nordic-Layout verwendest du `Nordic ISO (QWERTY)`.
 
 ## Empfohlene Einstellungen
 
 Standardmäßig verwendet das Plugin:
 
 ```text
-Keyboard Layout: German ISO-DE
-Per-Key Color Detail: 24
+Keyboard Layout: Auto
+Per-Key Color Detail: 10
 Update Rate: 60 FPS
+Anti-Flicker Timing: On
 TestRGB Mode: Off
 ```
 
-Diese Einstellungen liefen während der Entwicklung auf der getesteten Tastatur stabil.
+Mehr als 10 Farben gleichzeitig kann die Tastatur nicht darstellen. Ältere Einstellungen über 10 (`Full`, `32`, `24`, ...) werden wie 10 behandelt.
 
-Falls Flackern, USB-Probleme oder eine ungewöhnlich hohe Last auftreten, kannst du zum Beispiel Folgendes probieren:
+Falls USB-Probleme oder eine ungewöhnlich hohe Last auftreten, kannst du zum Beispiel Folgendes probieren:
 
 ```text
-Color Detail: 16
+Color Detail: 8
 Update Rate: 30 FPS oder 20 FPS
 ```
 
@@ -175,6 +195,7 @@ Scroll Lock
 Pause Break
 ISO_#
 ISO_<
+\
 Num Enter
 ```
 
@@ -185,6 +206,7 @@ Die ausgewählte Option `Keyboard Layout` passt außerdem die Y/Z-Zuordnung für
 ```text
 German ISO-DE -> QWERTZ
 Nordic ISO    -> QWERTY
+US ANSI       -> QWERTY
 ```
 
 So verwendest du Keytap:
@@ -249,24 +271,22 @@ Nach Abschluss eines Scans `TestRGB Mode` einmal auf `Off` stellen und anschlie�
 
 Prüfe Folgendes:
 
-- Die Tastatur ist eine unterstützte Function-2-ISO-Variante
+- Die Tastatur ist eine unterstützte Function-2-Variante (ISO `0x2131` oder US ANSI `0x2130`)
 - Die `.js` liegt in `Documents\WhirlwindFX\Plugins`
 - SignalRGB wurde vollständig neu gestartet
 - Es liegt keine ältere Custom-Function-2-Datei mehr im gleichen Ordner
 
-Wenn deine Function 2 eine andere Product ID als `0x2131` besitzt, füge bei einem Issue bitte die Geräteinformationen aus **SignalRGB → Einstellungen → Geräteliste** hinzu.
+Wenn deine Function 2 eine andere Product ID als `0x2130` oder `0x2131` besitzt, füge bei einem Issue bitte die Geräteinformationen aus **SignalRGB → Einstellungen → Geräteliste** hinzu.
 
-### Die Tastatur erscheint, leuchtet aber nicht richtig
+### Einzelne Tasten bleiben bei farbigen Effekten dunkel
+
+Die Firmware stellt höchstens 10 Farbgruppen pro Frame dar. Lass `Per-Key Color Detail` auf `10` oder niedriger; ältere Werte über 10 werden wie 10 behandelt.
 
 Wenn NZXT CAM oder eine andere RGB-Software gerade auf die Tastatur zugreift, beende sie und starte SignalRGB anschließend neu.
 
-Zum Gegencheck kannst du außerdem zunächst
+### Tasten gehen alle paar Sekunden kurz aus
 
-```text
-16 Farben / 20 FPS
-```
-
-einstellen, um Timing- oder USB-Probleme auszuschließen.
+Prüfe, ob `Anti-Flicker Timing` auf `On` steht. Wenn im Geräte-Log steht, dass Anti-Flicker Timing deaktiviert wurde, konnte das Plugin die Rückmeldungen der Tastatur nicht lesen; erstelle dann bitte ein Issue mit deiner SignalRGB-Version.
 
 ### Y und Z reagieren beim Keytap an der falschen Position
 
@@ -275,6 +295,7 @@ Prüfe die Einstellung `Keyboard Layout`:
 ```text
 German ISO-DE       -> QWERTZ
 Nordic ISO (QWERTY) -> QWERTY
+US ANSI (QWERTY)    -> QWERTY
 ```
 
 ### Keytap funktioniert bei einer bestimmten Taste nicht
@@ -311,9 +332,21 @@ Folgepaket:
 43 | dataLength | remainingPackets | bis zu 61 Byte
 ```
 
-Das Plugin fasst identische Farben nach Möglichkeit zusammen und kann den SignalRGB-Canvas optional auf weniger Farbgruppen quantisieren.
+Die Firmware übernimmt höchstens **10 Farbgruppen pro Frame**. Gruppen nach der zehnten werden ignoriert, ihre Tasten bleiben dunkel. Außerdem ersetzt jeder Frame die komplette Tastatur, ein Frame lässt sich also nicht auf mehrere Übertragungen aufteilen. Das Plugin fasst identische Farben nach Möglichkeit zu einer Gruppe zusammen und gruppiert die Tasten sonst in höchstens 10 Farben (k-means, ausgehend vom vorherigen Frame, damit die Gruppengrenzen bei animierten Effekten ruhig bleiben).
 
-Deutsch ISO-DE und Nordic ISO verwenden in der aktuellen Implementierung dieselbe physische RGB-Bit-Map. Der Layout-Schalter ändert nur die für den QWERTZ-/QWERTY-Unterschied notwendige Y/Z-Benennung in SignalRGB.
+Die Tastatur bestätigt jedes Paket mit einem Input-Report auf demselben Interface:
+
+```text
+Paket-Echo:
+43 | E5 | remainingPackets | zurückgesendete Nutzdaten
+
+Frame-Ende (nach dem letzten Paket):
+43 | 81 | 00 | 01 | ...
+```
+
+Zusätzlich führt die Firmware alle 60 ms eine interne Aufgabe aus. Ein Frame, der in diesem Moment fertig wird, erhält eine verspätete Frame-Ende-Meldung (2-6 ms statt etwa 1 ms), und bei echten Effekten gehen einzelne Tasten kurz aus. Mit `Anti-Flicker Timing` liest das Plugin diese Meldungen, ermittelt die Phase der Aufgabe aus den verspäteten Meldungen und verzögert einen Frame um wenige Millisekunden, wenn er zwischen 8 ms vor und 2 ms nach der Aufgabe fertig würde.
+
+Deutsch ISO-DE und Nordic ISO verwenden in der aktuellen Implementierung dieselbe physische RGB-Bit-Map; der Layout-Schalter ändert dort nur die für den QWERTZ-/QWERTY-Unterschied notwendige Y/Z-Benennung in SignalRGB. Die Unterschiede von US ANSI stehen unter [US ANSI](#us-ansi).
 
 ## Wichtig
 
@@ -329,7 +362,7 @@ Besonders hilfreich sind:
 
 - Nordic-Keytap mit unterschiedlichen SignalRGB-Effekten testen
 - andere Function-2-Product-IDs und Firmware-Versionen testen
-- ANSI-Layouts testen
+- weitere ANSI-Layouts außer US testen
 - physische Tastenpositionen weiter verbessern
 - firmwareabhängiges Verhalten dokumentieren
 - USB-Captures von noch nicht unterstützten Varianten bereitstellen

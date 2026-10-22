@@ -2,7 +2,7 @@
 
 [English](README.md) | [Deutsch](README_DE.md)
 
-Unofficial community plugin that adds **true per-key RGB control** for the **NZXT Function 2 ISO keyboard** in SignalRGB.
+Unofficial community plugin that adds **true per-key RGB control** for the **NZXT Function 2 keyboard** (**ISO** and **US ANSI**) in SignalRGB.
 
 The stock SignalRGB implementation exposes the keyboard as a small number of lighting zones. This plugin uses the keyboard's USB HID RGB protocol directly, allowing SignalRGB to address the individual keys and use normal canvas effects across the whole keyboard.
 
@@ -12,12 +12,15 @@ The stock SignalRGB implementation exposes the keyboard as a small number of lig
 - Multi-layout support:
   - **German ISO-DE**
   - **Nordic ISO (QWERTY)**
+  - **US ANSI (QWERTY)**
+  - **Auto**: picks US ANSI or German ISO-DE from the keyboard's Product ID
 - Complete ISO physical RGB mapping, including Right Shift (`bit 77`)
 - SignalRGB canvas effects across the complete keyboard
 - **Keytap / keypress effect support** through SignalRGB-compatible key names
-- Full RGB detail at up to **60 FPS**
-- Optional lower color-detail modes: `32`, `24`, `16`, `12`, or `8`
+- Per-key colors at up to **60 FPS**, with up to **10 different colors per frame** (the firmware's limit, see [Technical notes](#technical-notes))
+- Optional lower color-detail modes: `8`, `6`, or `4`
 - Optional update-rate limits: `60`, `30`, `20`, `15`, or `10 FPS`
+- **Anti-flicker timing**: frames avoid the firmware's internal 60 ms task, which otherwise makes some keys blink off
 - Frame caching to avoid unnecessary USB traffic
 - Built-in **TestRGB diagnostics** for raw-bit, row-by-row, and single-bit testing
 - Custom user plugin, so it survives normal SignalRGB updates
@@ -48,20 +51,34 @@ Because of this, v6.2 includes a selectable keyboard layout and swaps the Signal
 
 The underlying HID protocol, RGB bit mapping, LED positions, and 60 FPS streaming remain unchanged.
 
+### US ANSI
+
+The US ANSI Function 2 uses Product ID `0x2130` and the same RGB protocol. Its layout differs from ISO in a few places:
+
+- `\` sits at the end of the Tab row on **bit 45**
+- there is no `ISO_<` key; its bit is folded into the wider Left Shift
+- the `ISO_#` bit (`60`) lies under the wider ANSI Enter
+- the right side of the bottom row is Right Alt, Right Win, Fn, Right Ctrl, and **bit 90 is Fn**
+- Y and Z use the QWERTY names
+
+### Auto
+
+`Auto` is the default. It selects `US ANSI (QWERTY)` for Product ID `0x2130` and `German ISO-DE` otherwise. Select `Nordic ISO (QWERTY)` manually for the Nordic keyboard.
+
 ## Tested hardware
 
 The plugin was developed and hardware-tested with:
 
-| Item | Value |
-| --- | --- |
-| Keyboard | NZXT Function 2 ISO |
-| USB Vendor ID | `0x1E71` |
-| USB Product ID | `0x2131` |
-| HID Interface | `1` |
-| HID Usage Page | `0xFFCA` |
-| HID Usage | `0x0001` |
-| Tested firmware | `1.3.22` |
-| Development layout | German ISO-DE |
+| Item | ISO | US ANSI |
+| --- | --- | --- |
+| Keyboard | NZXT Function 2 ISO | NZXT Function 2 US ANSI |
+| USB Vendor ID | `0x1E71` | `0x1E71` |
+| USB Product ID | `0x2131` | `0x2130` |
+| HID Interface | `1` | `1` |
+| HID Usage Page | `0xFFCA` | `0xFFCA` |
+| HID Usage | `0x0001` | `0x0001` |
+| Tested firmware | `1.3.22` | `1.3.22` |
+| Layout | German ISO-DE (development layout) | US ANSI (QWERTY) |
 
 Nordic ISO has additionally been checked against the physical key/LED mapping. If your Nordic Function 2 uses a different Product ID or firmware behavior, please open an issue and include the device information shown in SignalRGB.
 
@@ -101,7 +118,7 @@ You can also open the correct folder directly from SignalRGB using the **Plugins
 
 If you previously installed another custom Function 2 `.js` file, remove or move it out of the custom Plugins folder.
 
-There should ideally be only **one custom plugin matching VID `0x1E71` / PID `0x2131`**.
+There should ideally be only **one custom plugin matching VID `0x1E71` / PID `0x2130` or `0x2131`**.
 
 ### 5. Copy the plugin file
 
@@ -118,7 +135,7 @@ Start SignalRGB again.
 The keyboard should now appear as:
 
 ```text
-NZXT Function 2 Per-Key ISO
+NZXT Function 2 Per-Key
 ```
 
 SignalRGB should label it as a custom/user plugin.
@@ -129,29 +146,32 @@ Open the Function 2 device settings and select:
 
 ```text
 Keyboard Layout
+- Auto
+- US ANSI (QWERTY)
 - German ISO-DE
 - Nordic ISO (QWERTY)
 ```
 
-Use `German ISO-DE` for a German keyboard and `Nordic ISO (QWERTY)` for the Nordic layout.
+`Auto` picks US ANSI or German ISO-DE from the keyboard's Product ID. Use `Nordic ISO (QWERTY)` for the Nordic layout.
 
 ## Recommended settings
 
 The plugin defaults to:
 
 ```text
-Keyboard Layout: German ISO-DE
-Per-Key Color Detail: 24
+Keyboard Layout: Auto
+Per-Key Color Detail: 10
 Update Rate: 60 FPS
+Anti-Flicker Timing: On
 TestRGB Mode: Off
 ```
 
-These settings have been stable during testing on the keyboard used for development.
+10 colors is the most the keyboard can show at once. Older settings above 10 (`Full`, `32`, `24`, ...) are treated as 10.
 
-If you experience flickering, USB instability, or unusually high load, try:
+If you experience USB instability or unusually high load, try:
 
 ```text
-Color Detail: 16
+Color Detail: 8
 Update Rate: 30 FPS or 20 FPS
 ```
 
@@ -173,6 +193,7 @@ Scroll Lock
 Pause Break
 ISO_#
 ISO_<
+\
 Num Enter
 ```
 
@@ -183,6 +204,7 @@ The selected `Keyboard Layout` also updates the Y/Z mapping used by Keytap:
 ```text
 German ISO-DE -> QWERTZ
 Nordic ISO    -> QWERTY
+US ANSI       -> QWERTY
 ```
 
 To use a Keytap effect:
@@ -247,24 +269,22 @@ After a scan completes, set `TestRGB Mode` to `Off` and select the scan mode aga
 
 Check that:
 
-- the keyboard is a supported Function 2 ISO variant
+- the keyboard is a supported Function 2 variant (ISO `0x2131` or US ANSI `0x2130`)
 - the `.js` file is inside `Documents\WhirlwindFX\Plugins`
 - SignalRGB was fully restarted
 - no older custom Function 2 plugin is still in the same folder
 
-If your Function 2 has a Product ID other than `0x2131`, please include the device information from **SignalRGB → Settings → Device List** when opening an issue.
+If your Function 2 has a Product ID other than `0x2130` or `0x2131`, please include the device information from **SignalRGB → Settings → Device List** when opening an issue.
 
-### The keyboard appears but does not light correctly
+### Some keys stay dark with colorful effects
+
+The firmware shows at most 10 color groups per frame. Keep `Per-Key Color Detail` at `10` or lower; older values above 10 are treated as 10.
 
 If NZXT CAM or another RGB application is actively controlling the keyboard, close it and restart SignalRGB.
 
-Also try reducing the plugin to:
+### Keys blink off for a moment every few seconds
 
-```text
-16 colors / 20 FPS
-```
-
-to rule out timing or USB issues.
+Make sure `Anti-Flicker Timing` is `On`. If the device log says that Anti-Flicker Timing was disabled, the plugin could not read the keyboard's reports; please open an issue and include your SignalRGB version.
 
 ### Y and Z react to the wrong Keytap position
 
@@ -273,6 +293,7 @@ Check the `Keyboard Layout` setting:
 ```text
 German ISO-DE       -> QWERTZ
 Nordic ISO (QWERTY) -> QWERTY
+US ANSI (QWERTY)    -> QWERTY
 ```
 
 ### Keytap does not react to a specific key
@@ -309,9 +330,21 @@ Continuation packet:
 43 | dataLength | remainingPackets | up to 61 bytes
 ```
 
-The plugin groups identical colors where possible and can optionally quantize the canvas into fewer color groups.
+The firmware applies at most **10 color groups per frame**. Groups after the 10th are ignored and their keys stay dark. Every frame also replaces the whole keyboard, so a frame cannot be split into several transactions. The plugin sends identical colors as one group where possible and otherwise clusters the keys into at most 10 colors (k-means, seeded from the previous frame so group borders stay steady while an effect animates).
 
-German ISO-DE and Nordic ISO use the same physical RGB bit map in the current implementation. The layout selector only changes the SignalRGB key naming required for the QWERTZ/QWERTY Y/Z difference.
+The keyboard acknowledges every packet with an input report on the same interface:
+
+```text
+Packet echo:
+43 | E5 | remainingPackets | echoed payload
+
+End of frame (after the last packet):
+43 | 81 | 00 | 01 | ...
+```
+
+The firmware also runs an internal task every 60 ms. A frame that completes while it runs gets a late end-of-frame report (2-6 ms instead of about 1 ms), and with real effects some keys blink off for a moment. With `Anti-Flicker Timing` on, the plugin reads these reports, learns the task's phase from the late ones, and delays a frame by a few milliseconds when it would complete between 8 ms before and 2 ms after the task.
+
+German ISO-DE and Nordic ISO use the same physical RGB bit map in the current implementation; that layout selector only changes the SignalRGB key naming required for the QWERTZ/QWERTY Y/Z difference. US ANSI differs as listed under [US ANSI](#us-ansi).
 
 ## Important
 
@@ -327,7 +360,7 @@ Useful contributions include:
 
 - testing Nordic Keytap behavior across different SignalRGB effects
 - testing other Function 2 product IDs and firmware versions
-- testing ANSI layouts
+- testing ANSI layouts other than US
 - improving physical key positions
 - reporting firmware-specific behavior
 - submitting USB captures for unsupported variants

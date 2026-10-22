@@ -2,10 +2,10 @@
  * NZXT Function 2 Per-Key RGB - Multi-Layout / Keytap / TestRGB v6.2
  *
  * Custom SignalRGB plugin for:
- *   VID 0x1E71 / PID 0x2131
+ *   VID 0x1E71 / PID 0x2130 (US ANSI), 0x2131 (ISO)
  *   Interface 1 / Usage Page 0xFFCA / Usage 0x0001
  *
- * Hardware-tested on NZXT Function 2 ISO, firmware 1.3.22.
+ * Hardware-tested on NZXT Function 2 ISO and US ANSI, firmware 1.3.22.
  *
  * Reverse-engineered RGB protocol:
  *   - One color group = 22 bytes:
@@ -17,9 +17,16 @@
  *       0x43, dataLength, remainingPackets, ...
  *       up to 61 stream bytes
  *
- * The plugin samples every physical key from the SignalRGB canvas and sends
- * true per-key RGB. 24 color detail at 60 FPS is the default because this
- * has proven stable in testing.
+ * The plugin samples every physical key from the SignalRGB canvas. The
+ * firmware applies at most 10 color groups per frame: groups after the 10th
+ * are dropped and their keys stay dark, and every frame replaces the whole
+ * keyboard (hardware-tested on US ANSI, PID 0x2130, firmware 1.3.22). The
+ * per-key colors are therefore clustered into at most 10 groups.
+ *
+ * Anti-flicker: the keyboard acknowledges every packet (0xE5) and every frame
+ * (0x81). A frame that completes while the firmware's 60 ms internal task
+ * runs gets a late 0x81 and makes some keys go dark for a moment; frames are
+ * timed to avoid that task.
  *
  * Keytap support:
  *   LedNames()/LedPositions() are explicitly exported and use SignalRGB's
@@ -28,6 +35,8 @@
  *
  * Verified ISO-DE mapping includes Right Shift on NZXT RGB bit 77.
  * Nordic ISO uses the same RGB bit/LED mapping; QWERTY swaps Y/Z Keytap names.
+ * US ANSI (PID 0x2130): backslash on bit 45, no ISO_< key, and Fn / Right Win
+ * positions swapped. The "Auto" layout picks ANSI or ISO-DE by product ID.
  * TestRGB: Raw Bit Scan, Physical Key Scan and Single Bit diagnostics.
  */
 
@@ -35,20 +44,22 @@
 lightingMode:readonly,
 colorDetail:readonly,
 updateRate:readonly,
+antiFlicker:readonly,
 keyboardLayout:readonly,
 diagnosticMode:readonly,
 diagnosticSpeed:readonly,
 diagnosticBit:readonly
 */
 
-export function Name() { return "NZXT Function 2 Per-Key ISO"; }
+export function Name() { return "NZXT Function 2 Per-Key"; }
 export function VendorId() { return 0x1E71; }
-export function ProductId() { return 0x2131; }
+// 0x2130 = US ANSI, 0x2131 = ISO.
+export function ProductId() { return [0x2130, 0x2131]; }
 export function Publisher() { return "GamingLPyt / Community Reverse Engineering"; }
 export function DeviceType() { return "keyboard"; }
 export function Size() { return DeviceConfig.size; }
-export function LedNames() { return getLayoutLedNames(); }
-export function LedPositions() { return DeviceConfig.vLedPositions; }
+export function LedNames() { return getLayout().names; }
+export function LedPositions() { return getLayout().positions; }
 export function ImageUrl() { return DeviceConfig.image; }
 
 export function Validate(endpoint) {
@@ -74,8 +85,9 @@ export function ControllableParameters() {
             group: "lighting",
             label: "Per-Key Color Detail",
             type: "combobox",
-            values: ["Full", "32", "24", "16", "12", "8"],
-            default: "24"
+            values: ["10", "8", "6", "4"],
+            default: "10",
+            description: "Maximum number of different colors per frame. The keyboard firmware can show at most 10 at once."
         },
         {
             property: "updateRate",
@@ -86,13 +98,22 @@ export function ControllableParameters() {
             default: "60 FPS"
         },
         {
+            property: "antiFlicker",
+            group: "lighting",
+            label: "Anti-Flicker Timing",
+            type: "combobox",
+            values: ["On", "Off"],
+            default: "On",
+            description: "Times each frame around the keyboard's internal 60 ms task. Frames that land on it make some keys go dark for a moment."
+        },
+        {
             property: "keyboardLayout",
             group: "lighting",
             label: "Keyboard Layout",
             type: "combobox",
-            values: ["German ISO-DE", "Nordic ISO (QWERTY)"],
-            default: "German ISO-DE",
-            description: "Selects the SignalRGB key names used for Keytap. The RGB bit mapping and physical LED positions are identical."
+            values: ["Auto", "US ANSI (QWERTY)", "German ISO-DE", "Nordic ISO (QWERTY)"],
+            default: "Auto",
+            description: "Selects the SignalRGB key names used for Keytap. Auto picks US ANSI for the ANSI keyboard (PID 0x2130) and German ISO-DE otherwise. US ANSI moves the backslash key to the Tab row and removes the ISO_< key."
         },
         {
             property: "diagnosticMode",
@@ -127,6 +148,21 @@ export function ControllableParameters() {
 const REPORT_LENGTH = 65;
 const MASK_BYTES = 18;
 const GROUP_BYTES = 22;
+
+// The firmware applies at most 10 color groups per frame; later groups are
+// dropped and their keys stay dark.
+const MAX_GROUPS = 10;
+
+// The firmware runs an internal task every 60 ms. A frame that completes while
+// it runs makes some keys go dark for a moment, and that frame's end-of-frame
+// report (0x81) arrives late (hardware-tested). Frames are timed to complete
+// outside a guard zone around the task. The task's period matched 60.000 ms
+// of PC time with no measurable drift, so only its phase is learned.
+const BUSY_PERIOD_MS = 60;
+const BUSY_GUARD_BEFORE_MS = 8;   // the task itself takes up to ~6 ms
+const BUSY_GUARD_AFTER_MS = 2;
+const LATE_END_MS = 3;
+const MAX_MISSED_FRAME_ENDS = 10;
 
 const MODEL_NAME = "Function 2 ISO";
 
@@ -252,6 +288,8 @@ class deviceLibrary {
                 // IMPORTANT:
                 // These are SignalRGB canonical key identifiers, not German labels.
                 // Keytap/keypress effects depend on these exact names.
+                // Bit 14 is the physical Scroll Lock key and bit 115 is Pause
+                // (hardware-tested).
                 vLedNames: [
                 "Esc",
                 "F1",
@@ -267,7 +305,7 @@ class deviceLibrary {
                 "F11",
                 "F12",
                 "Print Screen",
-                "Pause Break",
+                "Scroll Lock",
                 "`",
                 "1",
                 "2",
@@ -349,7 +387,7 @@ class deviceLibrary {
                 "Right Arrow",
                 "Num 9",
                 "Num +",
-                "Scroll Lock",
+                "Pause Break",
                 "Num 4",
                 "Num 5",
                 "Num 6",
@@ -484,21 +522,40 @@ class deviceLibrary {
 const NZXTdeviceLibrary = new deviceLibrary();
 const DeviceConfig = NZXTdeviceLibrary.LEDLibrary[MODEL_NAME];
 
-const keys = DeviceConfig.vLedNames.map((name, index) => ({
-    name,
-    bits: DeviceConfig.vKeys[index],
-    pos: DeviceConfig.vLedPositions[index]
-}));
+const ANSI_LAYOUT = "US ANSI (QWERTY)";
+const ANSI_PRODUCT_ID = 0x2130;
 
-const vLedNames = DeviceConfig.vLedNames;
-const vLedPositions = DeviceConfig.vLedPositions;
+let keys = [];
+let physicalScanOrder = [];
 
-function getLayoutLedNames() {
+// "Auto" follows the keyboard model: US ANSI for PID 0x2130, otherwise
+// German ISO-DE (the original default).
+function selectedLayout() {
+    const chosen = typeof keyboardLayout === "undefined" ? "Auto" : String(keyboardLayout || "Auto");
+
+    if (chosen !== "Auto") {
+        return chosen;
+    }
+
+    let productId = 0;
+
+    try {
+        productId = device.productId();
+    } catch (e) {
+        // LedNames()/LedPositions() can run before a device is attached.
+    }
+
+    return productId === ANSI_PRODUCT_ID ? ANSI_LAYOUT : "German ISO-DE";
+}
+
+function getLayout() {
+    const layout = selectedLayout();
     const names = DeviceConfig.vLedNames.slice();
+    const positions = DeviceConfig.vLedPositions.map(p => p.slice());
+    const bits = DeviceConfig.vKeys.map(b => b.slice());
 
-    if (String(keyboardLayout || "German ISO-DE") === "Nordic ISO (QWERTY)") {
-        // Verified physical LED mapping is identical to ISO-DE.
-        // Nordic uses QWERTY, so only the Y/Z SignalRGB key names swap.
+    if (layout === "Nordic ISO (QWERTY)" || layout === ANSI_LAYOUT) {
+        // The base table is QWERTZ; QWERTY layouts only swap the Y/Z names.
         const zIndex = names.indexOf("Z");
         const yIndex = names.indexOf("Y");
 
@@ -508,17 +565,71 @@ function getLayoutLedNames() {
         }
     }
 
-    return names;
+    if (layout === ANSI_LAYOUT) {
+        // ANSI backslash sits at the end of the Tab row on bit 45
+        // (hardware-tested). The ISO_# spot (bit 60) lies under the wider
+        // ANSI Enter key, so that bit goes to Enter.
+        const hashIndex = names.indexOf("ISO_#");
+        const enterIndex = names.indexOf("Enter");
+        if (hashIndex >= 0) {
+            names[hashIndex] = "\\";
+            bits[hashIndex] = [45];
+            positions[hashIndex] = [28, 5];
+            if (enterIndex >= 0) {
+                bits[enterIndex] = bits[enterIndex].concat([60]);
+            }
+        }
+
+        // ANSI has no ISO_< key; its bit is folded into the wider Left Shift.
+        const lessIndex = names.indexOf("ISO_<");
+        const shiftIndex = names.indexOf("Left Shift");
+        if (lessIndex >= 0) {
+            if (shiftIndex >= 0) {
+                bits[shiftIndex] = bits[shiftIndex].concat(bits[lessIndex]);
+            }
+            names.splice(lessIndex, 1);
+            positions.splice(lessIndex, 1);
+            bits.splice(lessIndex, 1);
+        }
+
+        // ANSI order is Right Alt, Right Win, Fn, Right Ctrl. Bit 90 lights
+        // the Fn key (hardware-tested), so Fn and Right Win swap positions.
+        const fnIndex = names.indexOf("Fn");
+        const winIndex = names.indexOf("Right Win");
+        if (fnIndex >= 0 && winIndex >= 0) {
+            const fnPos = positions[fnIndex];
+            positions[fnIndex] = positions[winIndex];
+            positions[winIndex] = fnPos;
+        }
+    }
+
+    return { names, positions, bits };
+}
+
+function rebuildKeys() {
+    const layout = getLayout();
+
+    keys = layout.names.map((name, index) => ({
+        name,
+        bits: layout.bits[index],
+        pos: layout.positions[index]
+    }));
+
+    physicalScanOrder = keys
+        .map((key, index) => index)
+        .sort((a, b) => {
+            const dy = keys[a].pos[1] - keys[b].pos[1];
+            if (dy !== 0) return dy;
+            return keys[a].pos[0] - keys[b].pos[0];
+        });
+
+    return layout;
 }
 
 function applyKeyboardLayout(logChange) {
-    const names = getLayoutLedNames();
+    const layout = rebuildKeys();
 
-    for (let i = 0; i < keys.length; i++) {
-        keys[i].name = names[i];
-    }
-
-    device.setControllableLeds(names, DeviceConfig.vLedPositions);
+    device.setControllableLeds(layout.names, layout.positions);
 
     // Force a clean next render after changing Keytap names.
     lastStream = null;
@@ -527,7 +638,7 @@ function applyKeyboardLayout(logChange) {
     lastRenderAt = 0;
 
     if (logChange) {
-        device.log("[NZXT Layout] Active layout: " + String(keyboardLayout || "German ISO-DE"));
+        device.log("[NZXT Layout] Active layout: " + selectedLayout());
     }
 }
 
@@ -540,20 +651,18 @@ let lastStream = null;
 let lastCanvasColors = null;
 let lastDetail = null;
 let lastRenderAt = 0;
+let lastCentroids = null;
+
+// Date.now() when a late end-of-frame report showed the busy task finishing.
+let busyEndAt = -1;
+// Frame timing turns itself off if the keyboard's reports cannot be read.
+let missedFrameEnds = 0;
 
 let diagnosticActiveMode = "Off";
 let diagnosticIndex = -1;
 let diagnosticLastStepAt = 0;
 let diagnosticComplete = false;
 let diagnosticLastSingleBit = -1;
-
-const physicalScanOrder = keys
-    .map((key, index) => index)
-    .sort((a, b) => {
-        const dy = keys[a].pos[1] - keys[b].pos[1];
-        if (dy !== 0) return dy;
-        return keys[a].pos[0] - keys[b].pos[0];
-    });
 
 export function Initialize() {
     device.setName(Name());
@@ -564,6 +673,9 @@ export function Initialize() {
     lastCanvasColors = null;
     lastDetail = null;
     lastRenderAt = 0;
+    lastCentroids = null;
+    busyEndAt = -1;
+    missedFrameEnds = 0;
 
     diagnosticActiveMode = "Off";
     diagnosticIndex = -1;
@@ -573,7 +685,7 @@ export function Initialize() {
 
     setSoftwareMode();
 
-    device.log("Function 2 ISO v6.2 initialized: German + Nordic layout support / 24 color / 60 FPS / Keytap / TestRGB");
+    device.log("Function 2 v6.2 initialized: US ANSI + German + Nordic layout support / 10 color groups / 60 FPS / Keytap / TestRGB");
 }
 
 export function Render() {
@@ -826,17 +938,14 @@ function cloneColors(colors) {
 }
 
 function buildColorGroups(colors) {
-    // Full keeps the exact sampled RGB values; identical colors may share one mask.
-    if (colorDetail === "Full") {
-        return buildExactGroups(colors);
-    }
-
     let target = parseInt(colorDetail, 10);
 
-    if (!target || target < 1) {
-        target = 16;
+    // Older settings ("Full", "24", ...) exceed what the firmware can show.
+    if (!target || target < 1 || target > MAX_GROUPS) {
+        target = MAX_GROUPS;
     }
 
+    // Exact colors when they fit; identical colors share one mask.
     const exact = buildExactGroups(colors);
 
     if (exact.length <= target) {
@@ -874,43 +983,23 @@ function buildExactGroups(colors) {
 }
 
 function buildKMeansGroups(colors, target) {
-    const centroids = initialiseCentroids(colors, target);
-    const assignments = new Array(colors.length).fill(0);
+    let best = runKMeans(colors, initialiseCentroids(colors, target));
 
-    // Three passes are enough for ~104 keys while keeping Render() lightweight.
-    // The canvas cache skips this work entirely for unchanged frames.
-    for (let iteration = 0; iteration < 3; iteration++) {
-        const sumR = new Array(centroids.length).fill(0);
-        const sumG = new Array(centroids.length).fill(0);
-        const sumB = new Array(centroids.length).fill(0);
-        const count = new Array(centroids.length).fill(0);
+    // With only 10 groups, clustering every frame from scratch makes group
+    // borders jump while an effect animates. Seeding from the previous frame
+    // keeps them steady; it wins unless the fresh result is clearly better.
+    if (lastCentroids && lastCentroids.length === target) {
+        const seeded = runKMeans(colors, cloneColors(lastCentroids));
 
-        for (let i = 0; i < colors.length; i++) {
-            const cluster = nearestCentroid(colors[i], centroids);
-            assignments[i] = cluster;
-
-            sumR[cluster] += colors[i][0];
-            sumG[cluster] += colors[i][1];
-            sumB[cluster] += colors[i][2];
-            count[cluster]++;
-        }
-
-        for (let c = 0; c < centroids.length; c++) {
-            if (count[c] > 0) {
-                centroids[c] = [
-                    Math.round(sumR[c] / count[c]),
-                    Math.round(sumG[c] / count[c]),
-                    Math.round(sumB[c] / count[c])
-                ];
-            }
+        if (seeded.error <= best.error * 1.25) {
+            best = seeded;
         }
     }
 
-    // Final assignment using the final centroid positions.
-    for (let i = 0; i < colors.length; i++) {
-        assignments[i] = nearestCentroid(colors[i], centroids);
-    }
+    lastCentroids = cloneColors(best.centroids);
 
+    const centroids = best.centroids;
+    const assignments = best.assignments;
     const byCluster = new Array(centroids.length);
 
     for (let c = 0; c < centroids.length; c++) {
@@ -945,6 +1034,52 @@ function buildKMeansGroups(colors, target) {
     return result;
 }
 
+function runKMeans(colors, centroids) {
+    const assignments = new Array(colors.length).fill(0);
+
+    // Six passes are plenty for ~104 keys and 10 clusters. The canvas cache
+    // skips this work entirely for unchanged frames.
+    for (let iteration = 0; iteration < 6; iteration++) {
+        const sumR = new Array(centroids.length).fill(0);
+        const sumG = new Array(centroids.length).fill(0);
+        const sumB = new Array(centroids.length).fill(0);
+        const count = new Array(centroids.length).fill(0);
+
+        for (let i = 0; i < colors.length; i++) {
+            const cluster = nearestCentroid(colors[i], centroids);
+            assignments[i] = cluster;
+
+            sumR[cluster] += colors[i][0];
+            sumG[cluster] += colors[i][1];
+            sumB[cluster] += colors[i][2];
+            count[cluster]++;
+        }
+
+        for (let c = 0; c < centroids.length; c++) {
+            if (count[c] > 0) {
+                centroids[c] = [
+                    Math.round(sumR[c] / count[c]),
+                    Math.round(sumG[c] / count[c]),
+                    Math.round(sumB[c] / count[c])
+                ];
+            } else {
+                // An empty cluster would waste one of the 10 groups.
+                centroids[c] = farthestColor(colors, centroids).slice();
+            }
+        }
+    }
+
+    // Final assignment using the final centroid positions.
+    let error = 0;
+
+    for (let i = 0; i < colors.length; i++) {
+        assignments[i] = nearestCentroid(colors[i], centroids);
+        error += colorDistanceSq(colors[i], centroids[assignments[i]]);
+    }
+
+    return { centroids, assignments, error };
+}
+
 function initialiseCentroids(colors, target) {
     const count = Math.min(target, colors.length);
     const centroids = [];
@@ -966,31 +1101,36 @@ function initialiseCentroids(colors, target) {
     ]);
 
     while (centroids.length < count) {
-        let bestIndex = 0;
-        let bestDistance = -1;
-
-        for (let i = 0; i < colors.length; i++) {
-            let nearest = Number.MAX_SAFE_INTEGER;
-
-            for (let c = 0; c < centroids.length; c++) {
-                const d = colorDistanceSq(colors[i], centroids[c]);
-
-                if (d < nearest) {
-                    nearest = d;
-                }
-            }
-
-            if (nearest > bestDistance) {
-                bestDistance = nearest;
-                bestIndex = i;
-            }
-        }
-
-        const chosen = colors[bestIndex];
+        const chosen = farthestColor(colors, centroids);
         centroids.push([chosen[0], chosen[1], chosen[2]]);
     }
 
     return centroids;
+}
+
+// The sampled color that the current centroids represent worst.
+function farthestColor(colors, centroids) {
+    let bestIndex = 0;
+    let bestDistance = -1;
+
+    for (let i = 0; i < colors.length; i++) {
+        let nearest = Number.MAX_SAFE_INTEGER;
+
+        for (let c = 0; c < centroids.length; c++) {
+            const d = colorDistanceSq(colors[i], centroids[c]);
+
+            if (d < nearest) {
+                nearest = d;
+            }
+        }
+
+        if (nearest > bestDistance) {
+            bestDistance = nearest;
+            bestIndex = i;
+        }
+    }
+
+    return colors[bestIndex];
 }
 
 function nearestCentroid(color, centroids) {
@@ -1062,6 +1202,14 @@ function sendStream(stream) {
     const bytesAfterFirst = stream.length - firstDataLength;
     const continuationCount =
         bytesAfterFirst <= 0 ? 0 : Math.ceil(bytesAfterFirst / 61);
+    // typeof guard: a newly added setting may not be defined yet.
+    const timed = (typeof antiFlicker === "undefined" || antiFlicker !== "Off") &&
+        missedFrameEnds < MAX_MISSED_FRAME_ENDS;
+
+    if (timed) {
+        waitForQuietSlot(1 + continuationCount);
+        device.clearReadBuffer();
+    }
 
     const first = new Array(REPORT_LENGTH).fill(0);
 
@@ -1104,7 +1252,64 @@ function sendStream(stream) {
         offset += chunkLength;
     }
 
+    if (timed) {
+        trackFrameEnd();
+    }
+
     return true;
+}
+
+// Delays a frame that would complete inside the guard zone around the busy
+// task. Each packet takes ~1 ms, plus ~1 ms for the end-of-frame report.
+function waitForQuietSlot(packetCount) {
+    if (busyEndAt < 0) {
+        return;
+    }
+
+    const completesAt = Date.now() + packetCount + 1;
+    const sinceBusy =
+        ((completesAt - busyEndAt) % BUSY_PERIOD_MS + BUSY_PERIOD_MS) % BUSY_PERIOD_MS;
+
+    if (sinceBusy < BUSY_GUARD_AFTER_MS) {
+        device.pause(Math.ceil(BUSY_GUARD_AFTER_MS - sinceBusy));
+    } else if (sinceBusy > BUSY_PERIOD_MS - BUSY_GUARD_BEFORE_MS) {
+        device.pause(Math.ceil(BUSY_PERIOD_MS - sinceBusy + BUSY_GUARD_AFTER_MS));
+    }
+}
+
+// Reads the per-packet acknowledgements (0xE5) and the end-of-frame report
+// (0x81). A late end-of-frame report marks the moment the busy task finished.
+function trackFrameEnd() {
+    const deadline = Date.now() + 20;
+    let lastAckAt = -1;
+
+    // At most 4 acknowledgements plus the end-of-frame report per frame.
+    for (let reads = 0; reads < 12 && Date.now() < deadline; reads++) {
+        const report = device.read([0x00], 64, 5);
+
+        if (device.getLastReadSize() <= 0) {
+            continue;
+        }
+
+        if (report[1] === 0xE5) {
+            lastAckAt = Date.now();
+        } else if (report[1] === 0x81) {
+            const endAt = Date.now();
+
+            if (lastAckAt >= 0 && endAt - lastAckAt >= LATE_END_MS) {
+                busyEndAt = endAt;
+            }
+
+            missedFrameEnds = 0;
+            return;
+        }
+    }
+
+    missedFrameEnds++;
+
+    if (missedFrameEnds === MAX_MISSED_FRAME_ENDS) {
+        device.log("[NZXT] No end-of-frame reports from the keyboard; Anti-Flicker Timing disabled.");
+    }
 }
 
 function sendAllBlack(force) {
